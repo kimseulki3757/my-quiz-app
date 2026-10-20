@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>상식 퀴즈 & 명예의 전당</title>
+  
+  <!-- Firebase SDK (호환성 버전: 로컬 파일에서도 오류 없이 바로 실행) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    body {
+      background: linear-gradient(135deg, #e0f2fe 0%, #fdf2f8 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .card {
+      background: #ffffff;
+      width: 100%;
+      max-width: 480px;
+      border-radius: 20px;
+      padding: 28px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.07);
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      color: #1e293b;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .badge {
+      display: inline-block;
+      background: #e2e8f0;
+      color: #475569;
+      font-size: 0.85rem;
+      padding: 4px 10px;
+      border-radius: 12px;
+      margin-bottom: 12px;
+    }
+
+    .question-text {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: #0f172a;
+      margin-bottom: 20px;
+      line-height: 1.4;
+    }
+
+    .options {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .option-btn {
+      background: #f8fafc;
+      border: 2px solid #e2e8f0;
+      padding: 14px 16px;
+      border-radius: 12px;
+      font-size: 1rem;
+      text-align: left;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      color: #334155;
+    }
+
+    .option-btn:hover {
+      background: #eff6ff;
+      border-color: #93c5fd;
+    }
+
+    .option-btn.correct {
+      background: #dcfce7 !important;
+      border-color: #22c55e !important;
+      color: #15803d;
+      font-weight: bold;
+    }
+
+    .option-btn.wrong {
+      background: #fee2e2 !important;
+      border-color: #ef4444 !important;
+      color: #b91c1c;
+    }
+
+    /* 결과 및 등록 영역 */
+    #result-section {
+      display: none;
+      text-align: center;
+    }
+
+    .score-banner {
+      font-size: 1.8rem;
+      font-weight: bold;
+      color: #2563eb;
+      margin: 15px 0 25px 0;
+    }
+
+    .input-group {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+
+    .input-group input {
+      flex: 1;
+      padding: 12px;
+      border: 2px solid #cbd5e1;
+      border-radius: 10px;
+      font-size: 1rem;
+      outline: none;
+    }
+
+    .input-group input:focus {
+      border-color: #3b82f6;
+    }
+
+    .primary-btn {
+      background: #3b82f6;
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .primary-btn:hover {
+      background: #1d4ed8;
+    }
+
+    .primary-btn:disabled {
+      background: #94a3b8;
+      cursor: not-allowed;
+    }
+
+    /* 명예의 전당 */
+    .leaderboard {
+      margin-top: 25px;
+      border-top: 2px dashed #e2e8f0;
+      padding-top: 20px;
+    }
+
+    .leaderboard h2 {
+      font-size: 1.15rem;
+      color: #334155;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .rank-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .rank-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #f8fafc;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 0.95rem;
+    }
+
+    .rank-item:nth-child(1) {
+      background: #fef9c3;
+      font-weight: 600;
+    }
+
+    .status-msg {
+      font-size: 0.85rem;
+      color: #64748b;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h1>💡 상식 퀴즈 챌린지</h1>
+
+    <!-- 1. 퀴즈 화면 -->
+    <div id="quiz-section">
+      <span class="badge" id="progress-text">문제 1 / 3</span>
+      <div class="question-text" id="question-text">문제가 여기에 표시됩니다.</div>
+      <div class="options" id="options-container"></div>
+    </div>
+
+    <!-- 2. 결과 및 DB 저장 화면 -->
+    <div id="result-section">
+      <p style="color: #64748b; font-size: 1.1rem;">퀴즈 완료!</p>
+      <div class="score-banner" id="final-score">100점</div>
+
+      <div class="input-group" id="save-form">
+        <input type="text" id="player-name" placeholder="학생 이름을 입력하세요" maxlength="10">
+        <button class="primary-btn" id="submit-btn" onclick="saveScore()">기록 등록</button>
+      </div>
+      <p class="status-msg" id="save-status"></p>
+
+      <button class="primary-btn" style="background: #64748b; width: 100%; margin-top: 5px;" onclick="restartQuiz()">다시 풀기</button>
+    </div>
+
+    <!-- 3. 실시간 명예의 전당 (Firestore 연동) -->
+    <div class="leaderboard">
+      <h2>🏆 명예의 전당 (상위 5명)</h2>
+      <ul class="rank-list" id="rank-list">
+        <li class="rank-item" style="justify-content: center; color: #94a3b8;">기록을 불러오는 중...</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    // --- 1. Firebase 초기화 ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyBgT3b4WZJ_-gk7bS3PGGR0JORJME97JsU",
+      authDomain: "ai-programming-750ee.firebaseapp.com",
+      projectId: "ai-programming-750ee",
+      storageBucket: "ai-programming-750ee.firebasestorage.app",
+      messagingSenderId: "240173895021",
+      appId: "1:240173895021:web:462fd83efd7c877dc51e64"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    // --- 2. 퀴즈 데이터 ---
+    const quizData = [
+      {
+        question: "AI(인공지능)의 영어 약자는 무엇일까요?",
+        options: ["Artificial Intelligence", "Auto Internet", "Apple Information"],
+        answer: 0
+      },
+      {
+        question: "태양계에서 크기가 가장 큰 행성은 무엇일까요?",
+        options: ["지구", "화성", "목성"],
+        answer: 2
+      },
+      {
+        question: "다음 중 곱셈 결과가 '144'가 되는 식은 무엇일까요?",
+        options: ["11 × 13", "12 × 12", "14 × 10"],
+        answer: 1
+      }
+    ];
+
+    let currentQuestionIndex = 0;
+    let score = 0;
+    let isAnswering = false;
+
+    // 간단한 효과음 생성기 (외부 파일 없이 브라우저 자체 재생)
+    function playBeep(isCorrect) {
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.frequency.value = isCorrect ? 587.33 : 220.00; // 정답: 높은음, 오답: 낮은음
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        osc.start();
+        gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.3);
+        osc.stop(audioCtx.currentTime + 0.3);
+      } catch (e) {
+        // 오디오 컨텍스트 미지원 환경 예외 처리
+      }
+    }
+
+    // --- 3. 퀴즈 화면 렌더링 ---
+    function loadQuestion() {
+      isAnswering = false;
+      const current = quizData[currentQuestionIndex];
+      document.getElementById('progress-text').innerText = `문제 ${currentQuestionIndex + 1} / ${quizData.length}`;
+      document.getElementById('question-text').innerText = current.question;
+
+      const optionsContainer = document.getElementById('options-container');
+      optionsContainer.innerHTML = '';
+
+      current.options.forEach((option, index) => {
+        const btn = document.createElement('button');
+        btn.className = 'option-btn';
+        btn.innerText = `${index + 1}. ${option}`;
+        btn.onclick = () => handleAnswer(index, btn);
+        optionsContainer.appendChild(btn);
+      });
+    }
+
+    function handleAnswer(selectedIndex, selectedBtn) {
+      if (isAnswering) return;
+      isAnswering = true;
+
+      const current = quizData[currentQuestionIndex];
+      const buttons = document.querySelectorAll('.option-btn');
+
+      if (selectedIndex === current.answer) {
+        selectedBtn.classList.add('correct');
+        score += Math.round(100 / quizData.length);
+        playBeep(true);
+      } else {
+        selectedBtn.classList.add('wrong');
+        buttons[current.answer].classList.add('correct');
+        playBeep(false);
+      }
+
+      setTimeout(() => {
+        currentQuestionIndex++;
+        if (currentQuestionIndex < quizData.length) {
+          loadQuestion();
+        } else {
+          showResult();
+        }
+      }, 1000);
+    }
+
+    function showResult() {
+      // 3문제 다 맞히면 깔끔하게 100점 처리
+      if (score > 90) score = 100;
+
+      document.getElementById('quiz-section').style.display = 'none';
+      document.getElementById('result-section').style.display = 'block';
+      document.getElementById('final-score').innerText = `${score}점`;
+    }
+
+    function restartQuiz() {
+      currentQuestionIndex = 0;
+      score = 0;
+      document.getElementById('player-name').value = '';
+      document.getElementById('player-name').disabled = false;
+      document.getElementById('submit-btn').disabled = false;
+      document.getElementById('save-status').innerText = '';
+      document.getElementById('result-section').style.display = 'none';
+      document.getElementById('quiz-section').style.display = 'block';
+      loadQuestion();
+    }
+
+    // --- 4. Firestore DB 저장 (scores 컬렉션) ---
+    async function saveScore() {
+      const nameInput = document.getElementById('player-name');
+      const submitBtn = document.getElementById('submit-btn');
+      const statusMsg = document.getElementById('save-status');
+      const name = nameInput.value.trim();
+
+      if (!name) {
+        alert("이름을 입력해 주세요!");
+        return;
+      }
+
+      submitBtn.disabled = true;
+      nameInput.disabled = true;
+      statusMsg.innerText = "Firestore에 등록 중...";
+
+      try {
+        await db.collection("scores").add({
+          name: name,
+          score: score,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        statusMsg.innerText = "🎉 명예의 전당 등록 완료!";
+      } catch (error) {
+        console.error("저장 실패:", error);
+        statusMsg.innerText = "저장 실패: Firestore 보안 규칙을 확인하세요.";
+        submitBtn.disabled = false;
+        nameInput.disabled = false;
+      }
+    }
+
+    // --- 5. Firestore 실시간 랭킹 구독 (상위 5명) ---
+    function listenLeaderboard() {
+      db.collection("scores")
+        .orderBy("score", "desc")
+        .limit(5)
+        .onSnapshot((snapshot) => {
+          const rankList = document.getElementById('rank-list');
+          rankList.innerHTML = '';
+
+          if (snapshot.empty) {
+            rankList.innerHTML = '<li class="rank-item" style="justify-content: center; color: #94a3b8;">아직 등록된 기록이 없습니다.</li>';
+            return;
+          }
+
+          let rank = 1;
+          snapshot.forEach((doc) => {
+            const data = doc.data();
+            const li = document.createElement('li');
+            li.className = 'rank-item';
+            
+            const medal = rank === 1 ? '🥇 ' : rank === 2 ? '🥈 ' : rank === 3 ? '🥉 ' : `${rank}위 `;
+            li.innerHTML = `
+              <span>${medal}${escapeHtml(data.name || '익명')}</span>
+              <span style="font-weight: 600; color: #2563eb;">${data.score}점</span>
+            `;
+            rankList.appendChild(li);
+            rank++;
+          });
+        }, (error) => {
+          console.error("랭킹 로드 오류:", error);
+          document.getElementById('rank-list').innerHTML = 
+            '<li class="rank-item" style="color: #ef4444; justify-content: center;">보안 규칙 설정(테스트 모드)이 필요합니다.</li>';
+        });
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    // 시작
+    loadQuestion();
+    listenLeaderboard();
+  </script>
+</body>
+</html>
